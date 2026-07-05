@@ -37,6 +37,7 @@ DEFAULT_SETTINGS = {
     "always_on_top": False,
     "max_size": "Native",
     "bitrate": "8M",
+    "tcpip_port": "5555",
     "last_address": "192.168.1.100:5555",
 }
 MAX_SIZES = ["Native", "1920", "1600", "1366", "1024", "800"]
@@ -141,9 +142,14 @@ def get_battery(serial):
 
 
 def get_device_ip(serial):
+    # Preferred: exactly the interface the user cares about for Wi-Fi ADB.
+    _, out = run_adb(["-s", serial, "shell", "ip addr show wlan0"])
+    match = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)", out)
+    if match:
+        return match.group(1)
+    # Fallback: routing table, in case the interface isn't named wlan0.
     _, out = run_adb(["-s", serial, "shell", "ip route"])
-    wlan_lines = [l for l in out.splitlines() if "wlan" in l]
-    for line in wlan_lines + out.splitlines():
+    for line in out.splitlines():
         if " src " in line:
             return line.split(" src ")[1].split()[0]
     return None
@@ -653,6 +659,8 @@ class DroidDeckWindow(Adw.ApplicationWindow):
         threading.Thread(target=work, daemon=True).start()
 
     def switch_to_wifi(self, serial):
+        port = str(self.settings.get("tcpip_port", "5555")).strip() or "5555"
+
         def work():
             name = self.device_name(serial)
             try:
@@ -662,10 +670,11 @@ class DroidDeckWindow(Adw.ApplicationWindow):
                         self.toast, f"{name}: no Wi-Fi address found (is Wi-Fi on?)"
                     )
                     return
-                run_adb(["-s", serial, "tcpip", "5555"])
+                GLib.idle_add(self.toast, f"Restarting {name} adb on port {port}…")
+                run_adb(["-s", serial, "tcpip", port])
                 time.sleep(1.5)
-                _, out = run_adb(["connect", f"{ip}:5555"], timeout=15)
-                GLib.idle_add(self.toast, out.strip() or f"Connected to {ip}:5555")
+                _, out = run_adb(["connect", f"{ip}:{port}"], timeout=15)
+                GLib.idle_add(self.toast, out.strip() or f"Connected to {ip}:{port}")
             except AdbError as err:
                 GLib.idle_add(self.toast, f"Wi-Fi switch failed: {err}")
 
@@ -851,8 +860,29 @@ class DroidDeckWindow(Adw.ApplicationWindow):
         for row in (audio_row, screen_off_row, awake_row, touches_row):
             behaviour_group.add(row)
 
+        wireless_group = Adw.PreferencesGroup(
+            title="Wireless",
+            description="Port used by “Switch to Wi-Fi” when restarting adb over TCP/IP.",
+        )
+        try:
+            port_value = float(self.settings.get("tcpip_port", "5555"))
+        except (TypeError, ValueError):
+            port_value = 5555.0
+        port_row = Adw.SpinRow(
+            title="ADB TCP/IP port",
+            adjustment=Gtk.Adjustment(
+                lower=1024,
+                upper=65535,
+                step_increment=1,
+                page_increment=100,
+                value=port_value,
+            ),
+        )
+        wireless_group.add(port_row)
+
         page.add(display_group)
         page.add(behaviour_group)
+        page.add(wireless_group)
         dialog.add(page)
 
         def bind_switch(row, key):
@@ -873,6 +903,10 @@ class DroidDeckWindow(Adw.ApplicationWindow):
         bitrate_row.connect(
             "notify::selected",
             lambda r, _p: self._set_setting("bitrate", BITRATES[r.get_selected()]),
+        )
+        port_row.connect(
+            "notify::value",
+            lambda r, _p: self._set_setting("tcpip_port", str(int(r.get_value()))),
         )
 
         dialog.present(self)

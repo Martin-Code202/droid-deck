@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Droid Deck
+GenericName=ADB Device Manager
+Comment=Manage multiple ADB devices and mirror them with scrcpy
+Exec=/usr/bin/python3 /home/coldfire/opt/droid-deck/droid_deck.py
+Icon=phone-symbolic
+Terminal=false
+Categories=Utility;Development;
+Keywords=adb;android;scrcpy;mirror;screen;
+StartupNotify=true

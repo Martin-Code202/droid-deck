@@ -45,6 +45,21 @@ python3 droid_deck.py
 Plug in a device with USB debugging enabled, or use the Wi-Fi button to
 connect one wirelessly. Then hit **Mirror**.
 
+### Optional: install a launcher
+
+To get a **Droid Deck** entry in your app grid, copy the bundled `.desktop`
+file into place and point its `Exec=` line at wherever you cloned the repo:
+
+```sh
+install -Dm644 dev.coldfire.DroidDeck.desktop \
+  ~/.local/share/applications/dev.coldfire.DroidDeck.desktop
+sed -i "s|/home/coldfire/opt/droid-deck|$PWD|" \
+  ~/.local/share/applications/dev.coldfire.DroidDeck.desktop
+update-desktop-database ~/.local/share/applications
+```
+
+Then search for "Droid Deck" in your app launcher.
+
 ### Keyboard shortcuts
 
 | Shortcut   | Action              |
